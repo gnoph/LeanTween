@@ -250,6 +250,8 @@ public class LeanTween : MonoBehaviour {
 	public static AnimationCurve punch = new AnimationCurve( new Keyframe(0.0f, 0.0f ), new Keyframe(0.112586f, 0.9976035f ), new Keyframe(0.3120486f, -0.1720615f ), new Keyframe(0.4316337f, 0.07030682f ), new Keyframe(0.5524869f, -0.03141804f ), new Keyframe(0.6549395f, 0.003909959f ), new Keyframe(0.770987f, -0.009817753f ), new Keyframe(0.8838775f, 0.001939224f ), new Keyframe(1.0f, 0.0f ) );
 	public static AnimationCurve shake = new AnimationCurve( new Keyframe(0f, 0f), new Keyframe(0.25f, 1f), new Keyframe(0.75f, -1f), new Keyframe(1f, 0f) ) ;
 
+	private static readonly IDictionary<int, bool> pendingCancellations = new Dictionary<int, bool>();
+
 	public static void init(){
 		init(maxTweens);
 	}
@@ -397,6 +399,20 @@ public class LeanTween : MonoBehaviour {
 					tween.callOnCompletes();
 			}
 
+			// Process pending cancellation
+			foreach (KeyValuePair<int, bool> cancellation in pendingCancellations){
+				int uniqueId = cancellation.Key;
+				bool callOnComplete = cancellation.Value;
+				int backId = uniqueId & 0xFFFF;
+				tween = tweens[backId];
+				if (tween.uniqueId == uniqueId){
+					if (callOnComplete && tween.optional.onComplete != null) {
+						tween.optional.onComplete();
+					}
+					removeTween(backId);
+				}
+			}
+			pendingCancellations.Clear();
 		}
 	}
 
@@ -566,9 +582,7 @@ public class LeanTween : MonoBehaviour {
 			int backCounter = uniqueId >> 16;
 			// Debug.Log("uniqueId:"+uniqueId+ " id:"+backId +" action:"+(TweenAction)backType + " tweens[id].type:"+tweens[backId].type);
 			if(tweens[backId].counter==backCounter){
-				if(callOnComplete && tweens[backId].optional.onComplete != null)
-					tweens[backId].optional.onComplete();
-				removeTween((int)backId);
+				pendingCancellations[uniqueId] = callOnComplete;
 			}
 		}
 	}
